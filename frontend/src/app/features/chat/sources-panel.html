@@ -1,0 +1,72 @@
+@if (streaming() && !cited().length) {
+  <div class="consulting"><app-icon name="search" [size]="14" /> {{ sources().length }} trechos de documentos consultados…</div>
+} @else {
+  @if (cited().length) {
+    <section class="sources">
+      <header class="sources-head">
+        <app-icon name="book" [size]="15" />
+        Fontes consultadas
+        <span class="count">{{ cited().length }}</span>
+      </header>
+      <ng-container *ngTemplateOutlet="groups; context: { $implicit: cited() }" />
+    </section>
+  }
+
+  @if (others().length) {
+    <button class="toggle-others" (click)="showOthers.set(!showOthers())">
+      <app-icon [name]="showOthers() ? 'chevron-down' : 'chevron-right'" [size]="14" />
+      {{ cited().length ? 'Outros trechos recuperados' : 'Trechos recuperados' }} ({{ others().length }})
+    </button>
+    @if (showOthers()) {
+      <section class="sources muted-sources">
+        <ng-container *ngTemplateOutlet="groups; context: { $implicit: others() }" />
+      </section>
+    }
+  }
+}
+
+<ng-template #groups let-items>
+  @for (item of items; track item.documentId) {
+    <div class="doc" [class.open]="expanded() === item.documentId">
+      <button class="doc-row" (click)="toggle(item.documentId)">
+        <span class="doc-icon"><app-icon [name]="fileIcon(item.fileType)" [size]="16" /></span>
+        <span class="doc-main">
+          <span class="doc-name truncate">{{ item.filename }}</span>
+          <span class="doc-meta">
+            <span class="type">{{ item.fileType }}</span>
+            @for (loc of item.locations.slice(0, 6); track loc) {
+              <span class="chip">{{ loc }}</span>
+            }
+            @if (item.locations.length > 6) {
+              <span class="chip">+{{ item.locations.length - 6 }}</span>
+            }
+            @if (item.ocr) {
+              <span class="chip ocr" title="Texto obtido por OCR">OCR</span>
+            }
+          </span>
+        </span>
+        <span class="score" title="Relevância (rerank)">{{ item.relevance | percent100 }}</span>
+        <span class="download" role="button" tabindex="0" title="Baixar documento" (click)="download(item, $event)" (keydown.enter)="download(item, $event)">
+          <app-icon name="download" [size]="15" />
+        </span>
+        <app-icon class="chevron" [name]="expanded() === item.documentId ? 'chevron-down' : 'chevron-right'" [size]="15" />
+      </button>
+      @if (expanded() === item.documentId) {
+        <div class="snippets">
+          @for (source of item.items; track source.index) {
+            <div class="snippet">
+              <div class="snippet-head">
+                <span class="cite-num">{{ source.index }}</span>
+                {{ location(source) ?? 'trecho' }}
+                @if (source.heading) {
+                  <span class="muted">· {{ source.heading }}</span>
+                }
+              </div>
+              <p>{{ source.snippet }}</p>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+</ng-template>

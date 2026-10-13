@@ -1,0 +1,221 @@
+<div class="page">
+  <div class="page-inner">
+    <header class="page-header">
+      <div>
+        <div class="eyebrow">Administração</div>
+        <h1>Modelos e RAG</h1>
+        <p>
+          Escolha o modelo de linguagem usado pelo Mon entre os modelos disponíveis no momento na Google e na
+          OpenAI, e ajuste os parâmetros de recuperação e rerank.
+        </p>
+      </div>
+    </header>
+
+    <div class="providers">
+      @for (provider of providers(); track provider.id) {
+        <div class="provider card">
+          <span class="provider-icon"><app-icon [name]="provider.id === 'cohere' ? 'layers' : 'cpu'" [size]="18" /></span>
+          <div class="grow">
+            <div class="provider-name">{{ provider.name }}</div>
+            <div class="muted small">
+              @if (provider.id === 'cohere') {
+                Rerank de trechos
+              } @else if (provider.id === 'google') {
+                LLM e embeddings (gemini-embedding-001)
+              } @else {
+                LLM alternativo
+              }
+            </div>
+          </div>
+          <span class="badge" [class.success]="provider.configured" [class.danger]="!provider.configured">
+            <app-icon [name]="provider.configured ? 'check' : 'key'" [size]="12" />
+            {{ provider.configured ? 'Configurado' : 'Sem chave' }}
+          </span>
+        </div>
+      }
+    </div>
+
+    @if (settings(); as current) {
+      <div class="current card">
+        <div class="current-icon"><app-icon name="zap" [size]="20" /></div>
+        <div class="grow">
+          <div class="muted small">Modelo ativo do Mon</div>
+          <div class="current-model">{{ current.llm_model }}</div>
+        </div>
+        <span class="badge primary">{{ current.llm_provider === 'google' ? 'Google' : 'OpenAI' }}</span>
+        <span class="badge">raciocínio: {{ current.reasoning_level }}</span>
+      </div>
+    }
+
+    <section class="card">
+      <div class="card-header">
+        <div class="tabs">
+          <button [class.active]="provider() === 'google'" (click)="selectProvider('google')">Google Gemini</button>
+          <button [class.active]="provider() === 'openai'" (click)="selectProvider('openai')">OpenAI</button>
+        </div>
+        <div class="row">
+          <div class="search">
+            <app-icon name="search" [size]="15" />
+            <input class="input" placeholder="Filtrar modelos" [ngModel]="search()" (ngModelChange)="search.set($event)" />
+          </div>
+          <button class="btn icon" title="Recarregar lista" (click)="loadModels()"><app-icon name="refresh" [size]="16" /></button>
+        </div>
+      </div>
+
+      @if (loadingModels()) {
+        <div class="empty"><span class="spinner"></span></div>
+      } @else if (modelsError()) {
+        <div class="empty"><strong>Não foi possível listar os modelos</strong>{{ modelsError() }}</div>
+      } @else {
+        <div class="models">
+          @for (model of filtered(); track model.id) {
+            <div class="model" [class.active]="isActive(model)">
+              <div class="grow model-main">
+                <div class="row">
+                  <span class="model-id mono">{{ model.id }}</span>
+                  @if (isActive(model)) {
+                    <span class="badge primary"><app-icon name="check" [size]="12" /> Em uso</span>
+                  }
+                  @if (model.supports_thinking) {
+                    <span class="badge">raciocínio</span>
+                  }
+                </div>
+                @if (model.display_name !== model.id || model.description) {
+                  <div class="model-desc">
+                    @if (model.display_name !== model.id) {
+                      <strong>{{ model.display_name }}</strong>
+                    }
+                    {{ model.description }}
+                  </div>
+                }
+                @if (model.input_token_limit) {
+                  <div class="muted small">
+                    Contexto: {{ formatTokens(model.input_token_limit) }} tokens · Saída: {{ formatTokens(model.output_token_limit) }} tokens
+                  </div>
+                }
+                @if (testResult(model.id); as result) {
+                  @if (result === 'loading') {
+                    <div class="test"><span class="spinner"></span> Testando…</div>
+                  } @else if (asResult(result); as r) {
+                    <div class="test" [class.ok]="r.ok" [class.fail]="!r.ok">
+                      <app-icon [name]="r.ok ? 'check-circle' : 'alert'" [size]="14" />
+                      @if (r.ok) {
+                        Respondeu em {{ r.latency_ms }} ms: "{{ r.reply }}"
+                      } @else {
+                        {{ r.error }}
+                      }
+                    </div>
+                  }
+                }
+              </div>
+              <div class="model-actions">
+                <button class="btn sm" (click)="test(model)" [disabled]="testResult(model.id) === 'loading'">
+                  <app-icon name="play" [size]="13" /> Testar
+                </button>
+                <button class="btn sm primary" (click)="use(model)" [disabled]="isActive(model)">Usar</button>
+              </div>
+            </div>
+          } @empty {
+            <div class="empty"><strong>Nenhum modelo encontrado</strong></div>
+          }
+        </div>
+      }
+    </section>
+
+    @if (form) {
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <h3>Parâmetros do RAG</h3>
+            <p>Valem imediatamente para novas perguntas, exceto o chunking, que vale para as próximas indexações.</p>
+          </div>
+        </div>
+        <form class="card-body settings" (ngSubmit)="save()">
+          <div class="group">
+            <h4>Geração</h4>
+            <div class="grid">
+              <div class="field">
+                <label>Nível de raciocínio</label>
+                <select class="select" name="reasoning" [(ngModel)]="form.reasoning_level">
+                  <option value="low">Baixo · respostas mais rápidas</option>
+                  <option value="medium">Médio</option>
+                  <option value="high">Alto · mais elaborado</option>
+                </select>
+                <span class="hint">Aplicado a modelos com raciocínio (Gemini 3+, GPT-5, série o).</span>
+              </div>
+              <div class="field">
+                <label>Mensagens de histórico</label>
+                <input class="input" type="number" name="history" min="0" max="30" [(ngModel)]="form.history_window" />
+                <span class="hint">Quantas mensagens anteriores entram no contexto.</span>
+              </div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" name="rewrite" [(ngModel)]="form.query_rewrite_enabled" />
+              Reescrever perguntas de acompanhamento antes da busca
+            </label>
+            <div class="field">
+              <label>Persona do assistente (prompt de sistema)</label>
+              <textarea class="textarea" name="prompt" rows="4" [(ngModel)]="form.system_prompt"></textarea>
+              <span class="hint">As regras de citação e de uso exclusivo do contexto são adicionadas automaticamente.</span>
+            </div>
+          </div>
+
+          <div class="group">
+            <h4>Recuperação e rerank</h4>
+            <div class="grid">
+              <div class="field">
+                <label>Candidatos da busca vetorial (top-k)</label>
+                <input class="input" type="number" name="topk" min="1" max="100" [(ngModel)]="form.retrieval_top_k" />
+              </div>
+              <div class="field">
+                <label>Trechos enviados ao modelo (top-n)</label>
+                <input class="input" type="number" name="topn" min="1" max="20" [(ngModel)]="form.rerank_top_n" />
+              </div>
+              <div class="field">
+                <label>Modelo de rerank (Cohere)</label>
+                <select class="select" name="rerankModel" [(ngModel)]="form.rerank_model">
+                  @for (option of rerankModels; track option.id) {
+                    <option [value]="option.id">{{ option.label }}</option>
+                  }
+                </select>
+              </div>
+              <div class="field">
+                <label>Relevância mínima</label>
+                <input class="input" type="number" name="minRel" min="0" max="1" step="0.05" [(ngModel)]="form.min_relevance" />
+                <span class="hint">Descarta trechos com pontuação abaixo do limite (0 a 1).</span>
+              </div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" name="rerank" [(ngModel)]="form.rerank_enabled" />
+              Usar rerank da Cohere
+            </label>
+          </div>
+
+          <div class="group">
+            <h4>Chunking</h4>
+            <div class="grid">
+              <div class="field">
+                <label>Tamanho do chunk (caracteres)</label>
+                <input class="input" type="number" name="chunk" min="200" max="8000" step="100" [(ngModel)]="form.chunk_size" />
+              </div>
+              <div class="field">
+                <label>Sobreposição (caracteres)</label>
+                <input class="input" type="number" name="overlap" min="0" max="2000" step="50" [(ngModel)]="form.chunk_overlap" />
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn" (click)="reset()">Descartar</button>
+            <button type="submit" class="btn primary" [disabled]="saving()">
+              @if (saving()) {
+                <span class="spinner"></span>
+              }
+              Salvar configurações
+            </button>
+          </div>
+        </form>
+      </section>
+    }
+  </div>
+</div>

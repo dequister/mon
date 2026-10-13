@@ -1,0 +1,212 @@
+<div class="page">
+  <div class="page-inner">
+    <header class="page-header">
+      <div>
+        <div class="eyebrow">Administração</div>
+        <h1>Documentos</h1>
+        <p>
+          Envie os arquivos que o Mon deve consultar. Cada envio gera um job de indexação: extração de texto
+          (com OCR quando necessário), divisão em trechos, embeddings e gravação no Qdrant.
+        </p>
+      </div>
+      <div class="actions">
+        <button class="btn" (click)="refresh()"><app-icon name="refresh" [size]="16" /> Atualizar</button>
+      </div>
+    </header>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="label">Documentos</div>
+        <div class="value">{{ stats()?.total ?? '—' }}</div>
+        <div class="sub">{{ countBy('indexed') }} indexados</div>
+      </div>
+      <div class="stat">
+        <div class="label">Em processamento</div>
+        <div class="value">{{ countBy('pending') + countBy('processing') }}</div>
+        <div class="sub">{{ countBy('failed') }} com falha</div>
+      </div>
+      <div class="stat">
+        <div class="label">Chunks indexados</div>
+        <div class="value">{{ stats()?.chunks ?? '—' }}</div>
+        <div class="sub">registrados no banco</div>
+      </div>
+      <div class="stat">
+        <div class="label">Vetores no Qdrant</div>
+        <div class="value">{{ stats()?.vectors ?? '—' }}</div>
+        <div class="sub">3072 dimensões</div>
+      </div>
+    </div>
+
+    <label
+      class="dropzone"
+      [class.over]="dragOver()"
+      (dragover)="onDragOver($event)"
+      (dragleave)="dragOver.set(false)"
+      (drop)="onDrop($event)"
+    >
+      <input #picker type="file" multiple [accept]="accept()" (change)="onPick(picker)" hidden />
+      <span class="drop-icon"><app-icon name="cloud-upload" [size]="28" /></span>
+      <strong>Arraste os arquivos aqui</strong>
+      <span class="muted">ou <span class="link">clique para selecionar</span></span>
+      <span class="formats">PDF, DOC, DOCX, ODT, RTF, XLS, XLSX, ODS, CSV, PPT, PPTX, TXT, MD e imagens · até 100 MB por arquivo</span>
+    </label>
+
+    @if (uploads().length) {
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <h3>Envios</h3>
+            <p>Arquivos com o mesmo nome e conteúdo diferente substituem a versão anterior e são reindexados.</p>
+          </div>
+          <button class="btn sm ghost" (click)="clearUploads()">Limpar</button>
+        </div>
+        <div class="uploads">
+          @for (task of uploads(); track task.id) {
+            <div class="upload">
+              <span class="file-icon"><app-icon [name]="fileIcon(task.name.split('.').pop())" [size]="16" /></span>
+              <div class="grow">
+                <div class="row">
+                  <span class="truncate grow upload-name">{{ task.name }}</span>
+                  <span class="muted size">{{ task.size | fileSize }}</span>
+                  @if (task.state === 'uploading') {
+                    <span class="badge info"><span class="spinner"></span> {{ task.progress | percent100 }}</span>
+                  } @else if (task.result) {
+                    <span class="badge" [class]="uploadLabels[task.result.status].tone">{{ uploadLabels[task.result.status].label }}</span>
+                  } @else {
+                    <span class="badge danger">Erro</span>
+                  }
+                </div>
+                @if (task.state === 'uploading') {
+                  <div class="progress"><span [style.width.%]="task.progress * 100"></span></div>
+                } @else {
+                  <div class="upload-msg" [class.error]="task.state === 'error'">{{ task.error ?? task.result?.message }}</div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </section>
+    }
+
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h3>Base de documentos</h3>
+          <p>Clique em um documento para ver os detalhes da extração.</p>
+        </div>
+        <div class="filters">
+          <div class="search">
+            <app-icon name="search" [size]="15" />
+            <input class="input" placeholder="Buscar por nome" [(ngModel)]="query" (keyup.enter)="refresh()" />
+          </div>
+          <select class="select" [(ngModel)]="statusFilter" (ngModelChange)="refresh()">
+            <option value="">Todos os status</option>
+            <option value="indexed">Indexados</option>
+            <option value="pending">Na fila</option>
+            <option value="processing">Processando</option>
+            <option value="failed">Com falha</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Documento</th>
+              <th>Status</th>
+              <th class="num">Páginas</th>
+              <th class="num">OCR</th>
+              <th class="num">Chunks</th>
+              <th class="num">Versão</th>
+              <th>Indexado em</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (doc of documents(); track doc.id) {
+              <tr class="clickable" (click)="toggle(doc)">
+                <td>
+                  <div class="doc-cell">
+                    <span class="file-icon"><app-icon [name]="fileIcon(doc.file_type)" [size]="16" /></span>
+                    <div class="grow">
+                      <div class="doc-name truncate" [title]="doc.filename">{{ doc.filename }}</div>
+                      <div class="muted doc-sub">
+                        {{ doc.file_type.toUpperCase() }} · {{ doc.size_bytes | fileSize }} ·
+                        {{ doc.source === 'folder' ? 'pasta sincronizada' : 'upload' }}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <span class="badge" [class]="statusLabels[doc.status].tone">
+                    @if (doc.status === 'processing') {
+                      <span class="spinner"></span>
+                    }
+                    {{ statusLabels[doc.status].label }}
+                  </span>
+                </td>
+                <td class="num">{{ doc.page_count ?? '—' }}</td>
+                <td class="num">{{ doc.ocr_pages || '—' }}</td>
+                <td class="num">{{ doc.chunk_count || '—' }}</td>
+                <td class="num">v{{ doc.version }}</td>
+                <td class="muted">{{ doc.indexed_at | dateTime }}</td>
+                <td>
+                  <div class="row-actions">
+                    <button class="btn sm ghost icon" title="Baixar" (click)="download(doc, $event)"><app-icon name="download" [size]="15" /></button>
+                    <button class="btn sm ghost icon" title="Reindexar" (click)="reindex(doc, $event)"><app-icon name="refresh" [size]="15" /></button>
+                    <button class="btn sm ghost icon danger" title="Excluir" (click)="remove(doc, $event)"><app-icon name="trash" [size]="15" /></button>
+                  </div>
+                </td>
+              </tr>
+              @if (expandedId() === doc.id) {
+                <tr class="details-row">
+                  <td colspan="8">
+                    <div class="details">
+                      @if (doc.error) {
+                        <div class="doc-error"><app-icon name="alert" [size]="15" /> {{ doc.error }}</div>
+                      }
+                      <div class="facts">
+                        <div><span>SHA-256</span><code class="mono">{{ doc.sha256.slice(0, 16) }}…</code></div>
+                        <div><span>Seções extraídas</span>{{ doc.extraction.sections ?? '—' }}</div>
+                        <div><span>Caracteres</span>{{ doc.extraction.characters?.toLocaleString('pt-BR') ?? '—' }}</div>
+                        <div><span>Enviado em</span>{{ doc.created_at | dateTime }}</div>
+                        @if (doc.extraction.sheets?.length) {
+                          <div><span>Planilhas</span>{{ doc.extraction.sheets?.join(', ') }}</div>
+                        }
+                      </div>
+                      @if (doc.extraction.pages?.length) {
+                        <div class="pages-title">Análise por página (detecção de páginas escaneadas)</div>
+                        <div class="pages">
+                          @for (page of doc.extraction.pages; track page.page) {
+                            <span class="page-chip" [class.ocr]="page.ocr" [title]="page.reason + ' · ' + page.text_chars + ' caracteres · imagens ' + (page.image_coverage * 100).toFixed(0) + '%'">
+                              {{ page.page }}
+                            </span>
+                          }
+                        </div>
+                        <div class="legend muted"><span class="page-chip ocr">n</span> página com OCR <span class="page-chip">n</span> texto nativo</div>
+                      }
+                    </div>
+                  </td>
+                </tr>
+              }
+            } @empty {
+              <tr>
+                <td colspan="8">
+                  <div class="empty">
+                    @if (loading()) {
+                      <span class="spinner"></span>
+                    } @else {
+                      <strong>Nenhum documento encontrado</strong>
+                      Envie arquivos pela área acima para começar.
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</div>

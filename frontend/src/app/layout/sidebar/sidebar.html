@@ -1,0 +1,92 @@
+<aside class="sidebar">
+  <div class="head">
+    <a class="brand" routerLink="/" (click)="newChat()">
+      <app-mon-logo [size]="30" />
+      <span>Mon</span>
+    </a>
+  </div>
+
+  <button class="new-chat" (click)="newChat()">
+    <app-icon name="plus" [size]="17" />
+    Nova conversa
+  </button>
+
+  <div class="search">
+    <app-icon name="search" [size]="15" />
+    <input
+      placeholder="Buscar conversas"
+      [ngModel]="search()"
+      (ngModelChange)="search.set($event)"
+      aria-label="Buscar conversas"
+    />
+  </div>
+
+  <nav class="conversations" aria-label="Conversas">
+    @for (group of groups(); track group.label) {
+      <div class="group-label">{{ group.label }}</div>
+      @for (conversation of group.items; track conversation.id) {
+        @if (editingId() === conversation.id) {
+          <div class="item editing">
+            <input
+              class="rename"
+              [(ngModel)]="editingTitle"
+              (keydown.enter)="saveRename(conversation)"
+              (keydown.escape)="editingId.set(null)"
+              (blur)="saveRename(conversation)"
+              autofocus
+            />
+          </div>
+        } @else {
+          <a
+            class="item"
+            [routerLink]="['/c', conversation.id]"
+            [class.active]="store.activeId() === conversation.id"
+            (click)="navigated.emit()"
+          >
+            <span class="title truncate">{{ conversation.title }}</span>
+            <span class="item-actions">
+              <button (click)="startRename(conversation, $event)" aria-label="Renomear" title="Renomear">
+                <app-icon name="pencil" [size]="14" />
+              </button>
+              <button (click)="remove(conversation, $event)" aria-label="Excluir" title="Excluir">
+                <app-icon name="trash" [size]="14" />
+              </button>
+            </span>
+          </a>
+        }
+      }
+    } @empty {
+      <div class="no-conversations">
+        @if (search()) {
+          Nenhuma conversa encontrada.
+        } @else {
+          Suas conversas aparecerão aqui.
+        }
+      </div>
+    }
+  </nav>
+
+  <footer class="footer">
+    @if (auth.isAdmin()) {
+      <div class="admin">
+        <div class="group-label">Administração</div>
+        @for (link of adminLinks; track link.path) {
+          <a class="admin-link" [routerLink]="link.path" routerLinkActive="active" (click)="navigated.emit()">
+            <app-icon [name]="link.icon" [size]="16" />
+            {{ link.label }}
+          </a>
+        }
+      </div>
+    }
+    <div class="user">
+      <span class="avatar">{{ initials() }}</span>
+      <div class="grow">
+        <div class="name truncate">{{ auth.user()?.full_name || auth.user()?.username }}</div>
+        <div class="role">{{ auth.isAdmin() ? 'Administrador' : 'Usuário' }}</div>
+      </div>
+      <button class="logout" (click)="logout()" title="Sair" aria-label="Sair">
+        <app-icon name="logout" [size]="16" />
+      </button>
+    </div>
+  </footer>
+</aside>

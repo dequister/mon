@@ -1,0 +1,58 @@
+<div class="login">
+  <section class="brand">
+    <div class="brand-inner">
+      <div class="row logo-row">
+        <app-mon-logo [size]="44" />
+        <span class="logo-text">Mon</span>
+      </div>
+      <h1>Pergunte aos documentos da sua instituição.</h1>
+      <p>
+        O Mon lê editais, regulamentos, planilhas e documentos digitalizados e responde em linguagem
+        natural, sempre mostrando as fontes consultadas.
+      </p>
+      <ul class="features">
+        <li><app-icon name="sparkles" /> Respostas com geração aumentada por recuperação (RAG)</li>
+        <li><app-icon name="scan" /> OCR automático para páginas escaneadas</li>
+        <li><app-icon name="book" /> Fontes citadas em cada resposta</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="form-side">
+    <form class="card form" (ngSubmit)="submit()">
+      <div class="form-head">
+        <app-mon-logo [size]="40" class="mobile-logo" />
+        <h2>Entrar</h2>
+        <p class="muted">Acesse com seu usuário e senha.</p>
+      </div>
+
+      @if (error()) {
+        <div class="error" role="alert"><app-icon name="alert" [size]="16" /> {{ error() }}</div>
+      }
+
+      <div class="field">
+        <label for="username">Usuário</label>
+        <div class="input-icon">
+          <app-icon name="user" [size]="16" />
+          <input id="username" class="input" name="username" [(ngModel)]="username" autocomplete="username" autofocus required />
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="password">Senha</label>
+        <div class="input-icon">
+          <app-icon name="lock" [size]="16" />
+          <input id="password" class="input" type="password" name="password" [(ngModel)]="password" autocomplete="current-password" required />
+        </div>
+      </div>
+
+      <button class="btn primary submit" type="submit" [disabled]="loading() || !username || !password">
+        @if (loading()) {
+          <span class="spinner"></span>
+        }
+        Entrar
+      </button>
+    </form>
+    <footer class="muted">Mon · Trabalho de Conclusão de Curso · Engenharia de Produção</footer>
+  </section>
+</div>

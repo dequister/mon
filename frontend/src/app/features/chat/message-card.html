@@ -1,0 +1,59 @@
+@if (message().role === 'user') {
+  <div class="user-row">
+    <div class="user-bubble">{{ message().content }}</div>
+  </div>
+} @else {
+  <article class="assistant">
+    <div class="avatar"><app-mon-logo [size]="30" /></div>
+    <div class="card-body">
+      <div class="name">Mon</div>
+
+      @if (message().streaming && !message().content) {
+        <div class="typing" aria-label="Mon está pensando"><span></span><span></span><span></span></div>
+      }
+
+      @if (message().content) {
+        <div class="markdown" [class.streaming]="message().streaming" [innerHTML]="message().content | markdown"></div>
+      }
+
+      @if (message().error) {
+        <div class="error"><app-icon name="alert" [size]="16" /> {{ message().error }}</div>
+      }
+
+      @if (message().sources.length) {
+        <app-sources-panel [sources]="message().sources" [streaming]="!!message().streaming" />
+      }
+
+      @if (!message().streaming && message().content) {
+        <footer class="actions">
+          <button class="action" (click)="copy()" [title]="copied() ? 'Copiado' : 'Copiar resposta'">
+            <app-icon [name]="copied() ? 'check' : 'copy'" [size]="14" />
+          </button>
+          @if (modelLabel()) {
+            <button class="action meta" (click)="showDetails.set(!showDetails())">
+              <app-icon name="cpu" [size]="13" /> {{ modelLabel() }}
+              @if (latency()) {
+                · {{ latency() }}
+              }
+            </button>
+          }
+        </footer>
+        @if (showDetails()) {
+          <div class="details">
+            @if (message().details.search_query) {
+              <div><strong>Consulta usada na busca:</strong> {{ message().details.search_query }}</div>
+            }
+            <div><strong>Candidatos na busca vetorial:</strong> {{ message().details.candidates ?? 0 }}</div>
+            @if (timings().length) {
+              <div class="timings">
+                @for (entry of timings(); track entry[0]) {
+                  <span class="chip">{{ entry[0] }}: {{ entry[1] }} ms</span>
+                }
+              </div>
+            }
+          </div>
+        }
+      }
+    </div>
+  </article>
+}

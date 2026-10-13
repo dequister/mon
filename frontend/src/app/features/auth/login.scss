@@ -1,0 +1,148 @@
+.login {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  min-height: 100vh;
+}
+
+.brand {
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(1200px 600px at -10% -10%, #3b3fb5 0%, transparent 60%),
+    radial-gradient(900px 600px at 110% 110%, #0f766e 0%, transparent 55%), #11142a;
+  color: #e7e9f7;
+  display: flex;
+  align-items: center;
+  padding: 64px;
+}
+
+.brand-inner {
+  max-width: 520px;
+}
+
+.logo-row {
+  gap: 12px;
+  margin-bottom: 48px;
+}
+
+.logo-text {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+h1 {
+  font-size: 38px;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: #fff;
+}
+
+.brand p {
+  font-size: 16px;
+  color: #b9bedc;
+  margin: 18px 0 32px;
+}
+
+.features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #d5d9f0;
+  }
+
+  app-icon {
+    color: #5eead4;
+  }
+}
+
+.form-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 32px 20px;
+}
+
+.form {
+  width: min(400px, 100%);
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  box-shadow: var(--shadow);
+}
+
+.form-head {
+  h2 {
+    font-size: 22px;
+  }
+
+  p {
+    margin: 4px 0 0;
+  }
+}
+
+.mobile-logo {
+  display: none;
+  margin-bottom: 14px;
+}
+
+.input-icon {
+  position: relative;
+
+  app-icon {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+  }
+
+  .input {
+    padding-left: 36px;
+    height: 42px;
+  }
+}
+
+.submit {
+  height: 42px;
+  margin-top: 4px;
+}
+
+.error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--danger-50);
+  color: var(--danger);
+  font-weight: 500;
+}
+
+footer {
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .login {
+    grid-template-columns: 1fr;
+  }
+
+  .brand {
+    display: none;
+  }
+
+  .mobile-logo {
+    display: inline-flex;
+  }
+}

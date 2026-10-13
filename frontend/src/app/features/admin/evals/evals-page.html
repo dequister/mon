@@ -1,0 +1,419 @@
+<div class="page">
+  <div class="page-inner">
+    <header class="page-header">
+      <div>
+        <div class="eyebrow">Administração</div>
+        <h1>Avaliação do RAG</h1>
+        <p>
+          Meça a qualidade do Mon com um conjunto de perguntas de teste. A recuperação é avaliada pelos
+          documentos esperados (hit rate, MRR, recall) e a resposta por um LLM juiz (fidelidade, relevância e
+          correção).
+        </p>
+      </div>
+      <div class="actions">
+        <button class="btn" (click)="generateDialog.set(true)"><app-icon name="sparkles" [size]="16" /> Gerar casos sintéticos</button>
+        <button class="btn primary" (click)="runDialog.set(true)" [disabled]="!cases().length">
+          <app-icon name="play" [size]="15" /> Executar avaliação
+        </button>
+      </div>
+    </header>
+
+    <div class="tabs">
+      <button [class.active]="tab() === 'runs'" (click)="tab.set('runs')">Execuções ({{ runs().length }})</button>
+      <button [class.active]="tab() === 'cases'" (click)="tab.set('cases')">Casos de teste ({{ cases().length }})</button>
+    </div>
+
+    @if (tab() === 'runs') {
+      @if (run(); as current) {
+        <section class="run-detail">
+          <div class="row run-head">
+            <button class="btn sm ghost" (click)="run.set(null)"><app-icon name="chevron-left" [size]="15" /> Execuções</button>
+            <h2 class="grow truncate">{{ current.name }}</h2>
+            <span class="badge" [class]="statusInfo[current.status].tone">
+              @if (current.status === 'running') {
+                <span class="spinner"></span>
+              }
+              {{ statusInfo[current.status].label }}
+            </span>
+          </div>
+
+          <div class="config">
+            <span class="chip">LLM: {{ current.config.llm_model }}</span>
+            <span class="chip">rerank: {{ current.config['rerank_enabled'] ? current.config.rerank_model : 'desligado' }}</span>
+            <span class="chip">top-k {{ current.config['retrieval_top_k'] }} → top-n {{ current.config['rerank_top_n'] }}</span>
+            <span class="chip">chunk {{ current.config['chunk_size'] }}/{{ current.config['chunk_overlap'] }}</span>
+            <span class="chip">{{ current.results.length }}/{{ current.case_count }} casos</span>
+            <span class="chip">{{ current.created_at | dateTime }}</span>
+          </div>
+
+          @if (current.status === 'running' || current.status === 'queued') {
+            <div class="progress big"><span [style.width.%]="(current.results.length / current.case_count) * 100"></span></div>
+          }
+
+          <div class="metric-groups">
+            <div class="metric-group">
+              <h4>Recuperação</h4>
+              <div class="metric-cards">
+                @for (metric of metrics; track metric.key) {
+                  @if (metric.group === 'retrieval') {
+                    <div class="metric" [title]="metric.hint" [class]="tone(metricValue(current.metrics, metric.key))">
+                      <div class="metric-label">{{ metric.label }}</div>
+                      <div class="metric-value">{{ metricValue(current.metrics, metric.key) | percent100: 1 }}</div>
+                    </div>
+                  }
+                }
+              </div>
+            </div>
+            <div class="metric-group">
+              <h4>Geração (LLM juiz)</h4>
+              <div class="metric-cards">
+                @for (metric of metrics; track metric.key) {
+                  @if (metric.group === 'generation') {
+                    <div class="metric" [title]="metric.hint" [class]="tone(metricValue(current.metrics, metric.key))">
+                      <div class="metric-label">{{ metric.label }}</div>
+                      <div class="metric-value">{{ metricValue(current.metrics, metric.key) | percent100: 1 }}</div>
+                    </div>
+                  }
+                }
+                <div class="metric">
+                  <div class="metric-label">Latência média</div>
+                  <div class="metric-value">
+                    {{ current.metrics.latency_ms_avg ? (current.metrics.latency_ms_avg / 1000).toFixed(1) + 's' : '—' }}
+                  </div>
+                  <div class="metric-sub">p95 {{ current.metrics.latency_ms_p95 ? (current.metrics.latency_ms_p95 / 1000).toFixed(1) + 's' : '—' }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <h3>Resultados por pergunta</h3>
+                <p>Clique para ver a resposta, a justificativa do juiz e os documentos recuperados.</p>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Pergunta</th>
+                    <th class="num">Hit</th>
+                    <th class="num">MRR</th>
+                    <th class="num">Fidel.</th>
+                    <th class="num">Relev.</th>
+                    <th class="num">Correção</th>
+                    <th class="num">Latência</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (result of current.results; track result.id) {
+                    <tr class="clickable" (click)="toggleResult(result)">
+                      <td class="muted">{{ result.position }}</td>
+                      <td class="question">
+                        {{ result.question }}
+                        @if (result.error) {
+                          <span class="badge danger">erro</span>
+                        }
+                      </td>
+                      @for (key of ['hit_rate', 'mrr', 'faithfulness', 'answer_relevance', 'correctness']; track key) {
+                        <td class="num">
+                          <span class="score" [class]="tone(metricValue(result.metrics, $any(key)))">
+                            {{ metricValue(result.metrics, $any(key)) | percent100 }}
+                          </span>
+                        </td>
+                      }
+                      <td class="num muted">{{ (result.latency_ms / 1000).toFixed(1) }}s</td>
+                    </tr>
+                    @if (expandedResult() === result.id) {
+                      <tr class="details-row">
+                        <td colspan="8">
+                          <div class="result-details">
+                            @if (result.error) {
+                              <pre class="log">{{ result.error }}</pre>
+                            }
+                            <div class="answers">
+                              <div>
+                                <div class="detail-label">Resposta do Mon</div>
+                                <div class="markdown answer" [innerHTML]="result.answer | markdown"></div>
+                              </div>
+                              <div>
+                                <div class="detail-label">Resposta de referência</div>
+                                <div class="answer">{{ result.expected_answer || 'Sem referência cadastrada.' }}</div>
+                                @if (result.judge_reason) {
+                                  <div class="detail-label spaced">Justificativa do juiz</div>
+                                  <div class="answer judge">{{ result.judge_reason }}</div>
+                                }
+                              </div>
+                            </div>
+                            <div class="detail-label">Documentos esperados</div>
+                            <div class="chips">
+                              @for (doc of result.expected_documents; track doc) {
+                                <span class="chip expected">{{ doc }}</span>
+                              } @empty {
+                                <span class="muted">Nenhum (métricas de recuperação não calculadas).</span>
+                              }
+                            </div>
+                            <div class="detail-label">Trechos recuperados (ordem final)</div>
+                            <div class="chips">
+                              @for (item of result.retrieved; track item.index) {
+                                <span class="chip" [class.hit]="result.expected_documents.includes(item.filename)" [class.cited]="item.cited">
+                                  [{{ item.index }}] {{ item.filename }}{{ item.page ? ' · p. ' + item.page : '' }}
+                                  @if (item.rerank_score != null) {
+                                    · {{ item.rerank_score | percent100 }}
+                                  }
+                                </span>
+                              } @empty {
+                                <span class="muted">Nenhum trecho recuperado.</span>
+                              }
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    }
+                  } @empty {
+                    <tr><td colspan="8"><div class="empty">Aguardando resultados…</div></td></tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      } @else {
+        <section class="card">
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Execução</th>
+                  <th>Status</th>
+                  <th>Modelo</th>
+                  <th class="num">Casos</th>
+                  <th class="num">Hit rate</th>
+                  <th class="num">MRR</th>
+                  <th class="num">Fidelidade</th>
+                  <th class="num">Relevância</th>
+                  <th class="num">Correção</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of runs(); track item.id) {
+                  <tr class="clickable" (click)="openRun(item.id)">
+                    <td>
+                      <div class="run-name">{{ item.name }}</div>
+                      <div class="muted small">{{ item.created_at | dateTime }}</div>
+                    </td>
+                    <td>
+                      <span class="badge" [class]="statusInfo[item.status].tone">
+                        @if (item.status === 'running') {
+                          <span class="spinner"></span>
+                        }
+                        {{ statusInfo[item.status].label }}
+                      </span>
+                    </td>
+                    <td class="mono">{{ item.config.llm_model }}</td>
+                    <td class="num">{{ item.case_count }}</td>
+                    @for (key of ['hit_rate', 'mrr', 'faithfulness', 'answer_relevance', 'correctness']; track key) {
+                      <td class="num">
+                        <span class="score" [class]="tone(metricValue(item.metrics, $any(key)))">
+                          {{ metricValue(item.metrics, $any(key)) | percent100: 1 }}
+                        </span>
+                      </td>
+                    }
+                    <td>
+                      <button class="btn sm ghost icon danger" title="Excluir" (click)="deleteRun(item, $event)">
+                        <app-icon name="trash" [size]="15" />
+                      </button>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="10">
+                      <div class="empty">
+                        @if (loading()) {
+                          <span class="spinner"></span>
+                        } @else {
+                          <strong>Nenhuma avaliação executada</strong>
+                          Cadastre ou gere casos de teste e clique em "Executar avaliação".
+                        }
+                      </div>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </section>
+      }
+    } @else {
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <h3>Casos de teste</h3>
+            <p>Selecione casos para avaliar apenas um subconjunto; sem seleção, todos são usados.</p>
+          </div>
+          <div class="row">
+            <input #importer type="file" accept="application/json,.json" hidden (change)="importFile(importer)" />
+            <button class="btn sm" (click)="importer.click()"><app-icon name="upload" [size]="14" /> Importar JSON</button>
+            <button class="btn sm" (click)="exportCases()" [disabled]="!cases().length"><app-icon name="download" [size]="14" /> Exportar</button>
+            <button class="btn sm primary" (click)="newCase()"><app-icon name="plus" [size]="14" /> Novo caso</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th class="check"><input type="checkbox" [checked]="cases().length && selectedCases().size === cases().length" (change)="toggleAll()" /></th>
+                <th>Pergunta</th>
+                <th>Documentos esperados</th>
+                <th>Tags</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of cases(); track item.id) {
+                <tr>
+                  <td class="check"><input type="checkbox" [checked]="selectedCases().has(item.id)" (change)="toggleCase(item.id)" /></td>
+                  <td class="question">
+                    {{ item.question }}
+                    @if (item.expected_answer) {
+                      <div class="muted small truncate expected-answer">↳ {{ item.expected_answer }}</div>
+                    }
+                  </td>
+                  <td>
+                    <div class="chips">
+                      @for (doc of item.expected_documents; track doc) {
+                        <span class="chip">{{ doc }}</span>
+                      } @empty {
+                        <span class="muted">—</span>
+                      }
+                    </div>
+                  </td>
+                  <td>
+                    <div class="chips">
+                      @for (tag of item.tags; track tag) {
+                        <span class="badge primary">{{ tag }}</span>
+                      }
+                    </div>
+                  </td>
+                  <td>
+                    <div class="row-actions">
+                      <button class="btn sm ghost icon" title="Editar" (click)="editCase(item)"><app-icon name="pencil" [size]="14" /></button>
+                      <button class="btn sm ghost icon danger" title="Excluir" (click)="deleteCase(item)"><app-icon name="trash" [size]="14" /></button>
+                    </div>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="5">
+                    <div class="empty">
+                      <strong>Nenhum caso de teste</strong>
+                      Crie casos manualmente, importe um JSON ou gere perguntas sintéticas a partir dos documentos indexados.
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
+  </div>
+</div>
+
+@if (caseForm(); as form) {
+  <div class="modal-backdrop" (click)="caseForm.set(null)">
+    <form class="modal wide" (click)="$event.stopPropagation()" (ngSubmit)="saveCase(form)">
+      <div class="modal-header">
+        <h3>{{ form.id ? 'Editar caso de teste' : 'Novo caso de teste' }}</h3>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label>Pergunta</label>
+          <textarea class="textarea" name="question" rows="2" [(ngModel)]="form.question" required></textarea>
+        </div>
+        <div class="field">
+          <label>Resposta de referência (opcional)</label>
+          <textarea class="textarea" name="answer" rows="3" [(ngModel)]="form.expected_answer"></textarea>
+          <span class="hint">Usada pelo juiz para calcular a correção.</span>
+        </div>
+        <div class="field">
+          <label>Documentos esperados</label>
+          <div class="row">
+            <input class="input" name="doc" list="document-names" placeholder="Nome do arquivo" [(ngModel)]="docToAdd" (keydown.enter)="$event.preventDefault(); addDocument(form)" />
+            <button type="button" class="btn" (click)="addDocument(form)">Adicionar</button>
+          </div>
+          <datalist id="document-names">
+            @for (name of documentNames(); track name) {
+              <option [value]="name"></option>
+            }
+          </datalist>
+          <div class="chips">
+            @for (doc of form.expected_documents; track doc) {
+              <span class="chip removable">{{ doc }} <button type="button" (click)="removeDocument(form, doc)"><app-icon name="x" [size]="12" /></button></span>
+            }
+          </div>
+          <span class="hint">Necessário para as métricas de recuperação (hit rate, MRR, recall).</span>
+        </div>
+        <div class="field">
+          <label>Tags (separadas por vírgula)</label>
+          <input class="input" name="tags" [(ngModel)]="form.tags" placeholder="matrícula, estágio" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" (click)="caseForm.set(null)">Cancelar</button>
+        <button type="submit" class="btn primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+}
+
+@if (runDialog()) {
+  <div class="modal-backdrop" (click)="runDialog.set(false)">
+    <form class="modal" (click)="$event.stopPropagation()" (ngSubmit)="startRun()">
+      <div class="modal-header">
+        <h3>Executar avaliação</h3>
+        <p>
+          {{ selectedCases().size ? selectedCases().size + ' casos selecionados' : 'Todos os ' + cases().length + ' casos' }}
+          serão respondidos pelo Mon com as configurações atuais e avaliados.
+        </p>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label>Nome da execução (opcional)</label>
+          <input class="input" name="runName" [(ngModel)]="runName" placeholder="Ex.: rerank v4 pro, chunk 1200" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" (click)="runDialog.set(false)">Cancelar</button>
+        <button type="submit" class="btn primary"><app-icon name="play" [size]="14" /> Executar</button>
+      </div>
+    </form>
+  </div>
+}
+
+@if (generateDialog()) {
+  <div class="modal-backdrop" (click)="generateDialog.set(false)">
+    <form class="modal" (click)="$event.stopPropagation()" (ngSubmit)="generate()">
+      <div class="modal-header">
+        <h3>Gerar casos sintéticos</h3>
+        <p>
+          O LLM lê trechos aleatórios dos documentos indexados e cria perguntas com resposta de referência e
+          documento esperado. Revise os casos gerados antes de usá-los no trabalho.
+        </p>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label>Quantidade de casos</label>
+          <input class="input" type="number" name="count" min="1" max="100" [(ngModel)]="generateCount" />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" (click)="generateDialog.set(false)">Cancelar</button>
+        <button type="submit" class="btn primary"><app-icon name="sparkles" [size]="14" /> Gerar</button>
+      </div>
+    </form>
+  </div>
+}

@@ -1,0 +1,175 @@
+<div class="page">
+  <div class="page-inner">
+    <header class="page-header">
+      <div>
+        <div class="eyebrow">Administração</div>
+        <h1>Jobs de sincronização</h1>
+        <p>
+          Acompanhe a fila de tarefas assíncronas: indexação de documentos, sincronização com a pasta de
+          arquivos, reindexações e avaliações. A lista é atualizada automaticamente.
+        </p>
+      </div>
+      <div class="actions">
+        <button class="btn" (click)="reindexAll()"><app-icon name="refresh" [size]="16" /> Reindexar tudo</button>
+        <button class="btn primary" (click)="syncFolder()"><app-icon name="folder-sync" [size]="16" /> Sincronizar pasta</button>
+      </div>
+    </header>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="label">Ativos</div>
+        <div class="value">{{ active() }}</div>
+        <div class="sub">{{ stats()['running'] ?? 0 }} executando · {{ stats()['queued'] ?? 0 }} na fila</div>
+      </div>
+      <div class="stat">
+        <div class="label">Concluídos</div>
+        <div class="value">{{ stats()['succeeded'] ?? 0 }}</div>
+      </div>
+      <div class="stat">
+        <div class="label">Com falha</div>
+        <div class="value fail">{{ stats()['failed'] ?? 0 }}</div>
+      </div>
+      <div class="stat">
+        <div class="label">Cancelados</div>
+        <div class="value">{{ stats()['canceled'] ?? 0 }}</div>
+      </div>
+    </div>
+
+    <div class="info card">
+      <app-icon name="folder" [size]="18" />
+      <div>
+        <strong>Base de arquivos sincronizada</strong>
+        <p>
+          Coloque arquivos na pasta <code class="mono">data/sources</code> do projeto e clique em
+          <em>Sincronizar pasta</em>. Arquivos novos são indexados, alterados são reindexados (com remoção dos
+          vetores antigos) e excluídos da pasta são removidos da base.
+        </p>
+      </div>
+    </div>
+
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h3>Fila de jobs</h3>
+          <p>Clique em um job para ver o log de execução.</p>
+        </div>
+        <div class="filters">
+          <select class="select" [(ngModel)]="typeFilter" (ngModelChange)="refresh()">
+            <option value="">Todos os tipos</option>
+            @for (option of typeOptions; track option[0]) {
+              <option [value]="option[0]">{{ option[1].label }}</option>
+            }
+          </select>
+          <select class="select" [(ngModel)]="statusFilter" (ngModelChange)="refresh()">
+            <option value="">Todos os status</option>
+            <option value="queued">Na fila</option>
+            <option value="running">Executando</option>
+            <option value="succeeded">Concluídos</option>
+            <option value="failed">Com falha</option>
+            <option value="canceled">Cancelados</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Tipo</th>
+              <th>Status</th>
+              <th class="progress-col">Progresso</th>
+              <th>Criado</th>
+              <th>Duração</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (job of jobs(); track job.id) {
+              <tr class="clickable" [class.selected]="selected()?.id === job.id" (click)="open(job)">
+                <td>
+                  <div class="type-cell">
+                    <span class="type-icon"><app-icon [name]="typeInfo[job.type].icon" [size]="15" /></span>
+                    <div class="grow">
+                      <div class="type-name">{{ typeInfo[job.type].label }}</div>
+                      <div class="muted target truncate">{{ target(job) || job.id.slice(0, 8) }}</div>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <span class="badge" [class]="statusInfo[job.status].tone">
+                    @if (job.status === 'running') {
+                      <span class="spinner"></span>
+                    } @else {
+                      <app-icon [name]="statusInfo[job.status].icon" [size]="12" />
+                    }
+                    {{ statusInfo[job.status].label }}
+                  </span>
+                </td>
+                <td class="progress-col">
+                  <div class="row">
+                    <div class="progress grow"><span [style.width.%]="job.progress * 100"></span></div>
+                    <span class="pct">{{ job.progress | percent100 }}</span>
+                  </div>
+                  <div class="muted message truncate" [title]="job.message ?? ''">{{ job.message }}</div>
+                </td>
+                <td class="muted" [title]="job.created_at | dateTime">{{ job.created_at | relativeTime }}</td>
+                <td class="muted">{{ job.started_at | duration: job.finished_at }}</td>
+                <td>
+                  <div class="row-actions">
+                    @if (job.status === 'queued') {
+                      <button class="btn sm ghost" (click)="cancel(job, $event)">Cancelar</button>
+                    }
+                    @if (job.status === 'failed' || job.status === 'canceled') {
+                      <button class="btn sm ghost" (click)="retry(job, $event)"><app-icon name="refresh" [size]="14" /> Repetir</button>
+                    }
+                  </div>
+                </td>
+              </tr>
+              @if (selected()?.id === job.id && selected(); as detail) {
+                <tr class="details-row">
+                  <td colspan="6">
+                    <div class="details">
+                      @if (detail.error) {
+                        <div>
+                          <div class="detail-label">Erro</div>
+                          <pre class="log error-log">{{ detail.error }}</pre>
+                        </div>
+                      }
+                      <div class="detail-grid">
+                        <div>
+                          <div class="detail-label">Parâmetros</div>
+                          <pre class="log small">{{ detail.payload | json }}</pre>
+                        </div>
+                        <div>
+                          <div class="detail-label">Resultado</div>
+                          <pre class="log small">{{ (detail.result | json) ?? '—' }}</pre>
+                        </div>
+                      </div>
+                      <div>
+                        <div class="detail-label">Log · tentativa {{ detail.attempts }}</div>
+                        <pre class="log">{{ detail.log || 'Sem registros ainda.' }}</pre>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              }
+            } @empty {
+              <tr>
+                <td colspan="6">
+                  <div class="empty">
+                    @if (loading()) {
+                      <span class="spinner"></span>
+                    } @else {
+                      <strong>Nenhum job encontrado</strong>
+                      Envie documentos ou sincronize a pasta para criar jobs.
+                    }
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+</div>

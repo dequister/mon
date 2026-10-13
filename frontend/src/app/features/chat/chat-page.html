@@ -1,0 +1,30 @@
+<div class="chat">
+  <div class="scroller" #scroller>
+    @if (store.messages().length === 0 && !store.loadingMessages()) {
+      <div class="welcome">
+        <app-mon-logo [size]="56" />
+        <h1>Olá{{ firstName() ? ', ' + firstName() : '' }}! Eu sou o Mon.</h1>
+        <p>Pergunte sobre editais, regulamentos, calendários e demais documentos. Eu respondo citando as fontes.</p>
+        <div class="suggestions">
+          @for (suggestion of suggestions; track suggestion) {
+            <button class="suggestion" (click)="send(suggestion)">{{ suggestion }}</button>
+          }
+        </div>
+      </div>
+    } @else {
+      <div class="thread">
+        @if (store.loadingMessages()) {
+          <div class="loading"><span class="spinner"></span> Carregando conversa…</div>
+        }
+        @for (message of store.messages(); track message.id) {
+          <app-message-card [message]="message" />
+        }
+      </div>
+    }
+  </div>
+
+  <div class="composer-area">
+    <app-composer [busy]="store.streaming()" (submitted)="send($event)" (stopped)="store.stop()" />
+    <p class="disclaimer">O Mon pode cometer erros. Confira as fontes consultadas antes de tomar decisões.</p>
+  </div>
+</div>
