@@ -56,6 +56,7 @@ Guia completo em [docs/10-execucao.md](docs/10-execucao.md).
 | [Dependências](docs/08-dependencias.md) | Bibliotecas, versões e licenças |
 | [Referências](docs/09-referencias.md) | Referências bibliográficas (ABNT) |
 | [Execução](docs/10-execucao.md) | Instalação, configuração e testes |
+| [Metodologia](docs/11-metodologia.md) | Passo a passo do desenvolvimento (base para a metodologia do TCC) |
 
 ## Estrutura do repositório
 

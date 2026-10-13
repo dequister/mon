@@ -1,6 +1,7 @@
 # 9. Referências
 
 Formatadas segundo a ABNT NBR 6023:2018. Datas de acesso referentes à implementação (outubro de 2026).
+As referências de método de pesquisa (Design Science Research, SUS, Wilcoxon) estão em [11-metodologia.md](11-metodologia.md).
 
 ## 9.1 Fundamentação teórica
 
