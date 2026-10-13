@@ -1,0 +1,32 @@
+# API
+fastapi==0.143.0
+uvicorn[standard]==0.54.0
+python-multipart==0.0.32
+pydantic-settings==2.15.0
+
+# Persistência
+sqlalchemy==2.1.4
+psycopg[binary]==3.3.6
+qdrant-client==1.19.1
+
+# Segurança
+pyjwt==2.15.1
+bcrypt==5.0.0
+
+# Provedores de IA
+google-genai==2.29.0
+openai==3.29.0
+cohere==7.2.0
+tenacity==9.1.4
+
+# Extração de documentos e OCR
+pymupdf==1.28.2
+pytesseract==0.3.13
+pillow==12.3.0
+python-docx==1.2.0
+python-pptx==1.0.2
+openpyxl==3.1.5
+xlrd==2.0.2
+odfpy==1.4.1
+pandas==3.0.6
+charset-normalizer==3.5.2
