@@ -1,0 +1,29 @@
+# Ambiente
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node / Angular
+node_modules/
+frontend/dist/
+frontend/.angular/
+
+# Dados locais
+data/uploads/
+data/sources/*
+!data/sources/.gitkeep
+
+# IDE / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
